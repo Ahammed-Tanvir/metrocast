@@ -1,0 +1,13 @@
+# Never commit health-system data, downloaded data or generated outputs
+data/
+test_output/
+test_past/
+example_output/
+flu-metrocast/
+*.parquet
+*.rds
+# R and macOS clutter
+.Rhistory
+.RData
+.Rproj.user/
+.DS_Store
