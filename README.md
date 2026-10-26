@@ -16,7 +16,7 @@ The forecast pipeline follows a multi-stage modeling approach built around the c
 - Transformation and feature construction:
   - The target series is transformed on a fourth-root scale, `z = y^(1/4)`, then normalized by a location-specific 95th percentile and centered by the location mean.
   - The transformed level is used to generate Taylor-series projections over recent history, rolling means, and seasonal covariates.
-  - Features include historical level and slope terms, rolling windows, holiday-adjacent seasonal timing (`season_week`, `wk_xmas`), population (`log_pop`), a location-level noise proxy, and contemporaneous state context (`st_level`, `st_slope3`, `st_slope4`).
+  - Features include historical level and slope terms, rolling windows, seasonal timing (`season_week`, `wk_xmas`), population (`log_pop`), a location-level noise proxy, and contemporaneous state context (`st_level`, `st_slope3`, `st_slope4`).
   - Training rows are created for k-step-ahead changes by aligning future target values with lagged feature windows across horizons 1 through 5.
 
 - Model specification:
@@ -57,24 +57,6 @@ The pipeline also writes diagnostics and plots to the local `data/` directory, i
 The correction layer targets SC, NC, and GA only. It compares the latest Prisma Health and MUSC surveillance data against the expected coverage and completeness pattern before applying the pooled correction. The logic is intentionally conservative: if either signal is missing, stale, or incomplete relative to the prior week, the correction is skipped and the model uses the median-only forecast.
 
 This safeguard prevents the adjustment from being applied under weak signal conditions and is designed to preserve forecast quality rather than force an intervention when evidence is insufficient.
-
-## Local configuration
-
-Edit `config.R` once to define the local paths and model identifiers:
-
-```r
-CONFIG <- list(
-  hub = "flu-metrocast",
-  data = "data",
-  prisma = "/path/to/Prisma_Health_Weekly_Influenza_State_dx_...csv",
-  musc = "/path/to/MUSC_Weekly_Influenza_State_dx_cond_lab_Incident.csv",
-  team = "DMAPRIME",
-  model = "QR_E",
-  threads = 4L
-)
-```
-
-The pipeline also supports runtime overrides via command-line options such as `--update`, `--reference-date`, and `--no-correction`.
 
 ## Notes
 
