@@ -1,67 +1,146 @@
-# DMAPRIME-QR_E: weekly Flu MetroCast pipeline (R)
+# DMAPRIME-QR_E: weekly Flu MetroCast generation workflow (R)
 
-**Model:** median of GBQR, QRF and linear quantile regression, with no interval widening, for all
-locations. For **South Carolina, North Carolina and Georgia** the forecast is corrected with the
-pooled **Prisma Health + MUSC** signal.
+This repository produces the weekly Flu MetroCast forecast for the `DMAPRIME-QR_E` model. The pipeline trains three quantile models and combines them by median: GBQR, quantile random forest, and linear quantile regression. For South Carolina, North Carolina, and Georgia, it then applies a Prisma Health + MUSC correction to improve the forecast when the local health-system signal is fresh and complete.
 
-## One-time setup
+The procedure below reflects how the code is actually executed in this project.
+
+## 1. Configure the run
+
+Edit `config.R` once for your local environment:
 
 ```r
-install.packages(c("data.table", "jsonlite", "lightgbm", "ranger", "quantreg", "arrow", "ggplot2"))
+CONFIG <- list(
+  hub = "flu-metrocast",
+  data = "data",
+  prisma = "/path/to/Prisma_Health_Weekly_Influenza_State_dx_...csv",
+  musc = "/path/to/MUSC_Weekly_Influenza_State_dx_cond_lab_Incident.csv",
+  team = "DMAPRIME",
+  model = "QR_E",
+  threads = 4L
+)
 ```
 
-1. Put this folder anywhere, for example next to your hub clone.
-2. Edit `config.R`: the Prisma and MUSC paths (already set to your Box folders), team, model and threads.
-3. Fork `reichlab/flu-metrocast` on GitHub. Set `hub` in `config.R` to your fork's clone, or let
-   `--update` clone the main repository the first time.
-4. Add `model-metadata/DMAPRIME-QR_E.yml` to the hub's `model-metadata/` folder (edit the contributor email).
-   `designated_model` is `false` because DMAPRIME-ObsHYB is your designated model; change it if this
-   model should replace it.
+Key points from the code:
 
-## Every Wednesday (due 8 PM ET)
+- `hub` is the local clone of `reichlab/flu-metrocast`.
+- `data` is the working data directory used for NSSP downloads and generated artifacts.
+- `prisma` and `musc` point to the weekly state-level health-system files used for the correction layer.
+- `team` and `model` define the output file naming convention.
 
-1. Wait for the hub's Wednesday data update, and make sure the Prisma and MUSC files in Box contain
-   last week (the week ending last Saturday).
-2. Run it, either way:
-   - **RStudio:** open `run_from_R.R` and click **Source**. It runs everything and opens the plots.
-   - **Terminal:** from this folder, `Rscript run_weekly.R --update`
-3. Read the log:
-   - `Prisma: complete through ...` and `MUSC: complete through ...` mean the correction was applied.
-     Any other message means SC/NC/GA used the plain median, which is safe.
-   - `validation: all 19 checks passed`. If any check fails, the script stops and nothing should be submitted.
-4. Look at the forecasts:
-   - `data/plots/<date>-DMAPRIME-QR_E.html`: one location at a time, with a menu and the arrow keys.
-   - `data/plots/<date>-DMAPRIME-QR_E.pdf`: the same, one location per page.
-5. Optionally run the hub's own validator:
-   ```r
-   hubValidations::validate_submission(hub_path = "flu-metrocast",
-     file_path = "DMAPRIME-QR/2026-10-24-DMAPRIME-QR_E.parquet")
-   ```
-6. Commit `model-output/DMAPRIME-QR/<date>-DMAPRIME-QR_E.parquet` to your fork and open a pull request.
+The command-line options in `run_weekly.R` can override these values at runtime, for example:
 
-Runtime is about 14 minutes on 1 core; `threads` in `config.R` shortens it.
+```bash
+Rscript run_weekly.R --update --threads 6
+```
 
-## Files
+## 2. Run the weekly workflow
 
-| file | purpose |
-|---|---|
-| `run_from_R.R` | one-click start from RStudio (calls run_weekly.R, opens the plots) |
-| `run_weekly.R` | the pipeline: update, fit, median, correction, write, validate, plot |
-| `config.R` | your paths, team, model, threads |
-| `metrocast_lib.R` | data loading, features, models, sample/parquet writing |
-| `correction.R` | Prisma + MUSC correction with freshness and completeness checks |
-| `correction_training_errors.csv` | past forecast errors for SC/NC/GA (2023-24 to 2025-26) the correction learns from |
-| `validate.R` | 19 checks against `tasks.json` and the hub README |
-| `plot_forecast.R` | dashboard-style plots (PDF and HTML) |
-| `tests/` | correction safety tests, validator tests, past-date accuracy check |
-| `model-metadata/DMAPRIME-QR_E.yml` | metadata for the hub |
+The project is designed to be run from the repository root. The standard weekly execution path is:
 
-## Safety rules built in
+```bash
+Rscript run_weekly.R --update
+```
 
-- **Correction fallback.** It is skipped for all three states if either health-system file is missing,
-  doesn't contain the latest NSSP week, or the latest week has under half the previous week's tests
-  (probably incomplete).
-- **Stale hub data.** The script warns if the hub data don't yet include last week; re-run after the update.
-- **Age-group files.** An age-group version of a health-system file is summed over age groups automatically.
-- **Format.** The file follows the hub README: seven columns, no `horizon`, and sample ids S1-S100 per
-  location. Each id is one trajectory across the 4 weeks, in a fixed random order per location.
+This launches the full workflow defined in `run_weekly.R`:
+
+1. It ensures the local `data/` directory exists.
+2. If `--update` is set, it checks out or updates the hub repository and downloads the latest NSSP parquet data from the CDC-hosted file.
+3. It reads the hub's `hub-config/tasks.json` to identify the active round based on the reference Saturday.
+4. It loads the latest hub data and auxiliary NSSP series needed for model training.
+5. It builds the training panel and fits:
+   - GBQR
+   - QRF
+   - Linear quantile regression
+6. It predicts the next submission period and combines the three models by the median.
+7. For SC, NC, and GA, it applies the Prisma + MUSC correction from `correction.R` when the signal is deemed usable.
+8. It converts the quantiles to submission samples and writes the parquet output.
+9. It validates the file against the hub requirements.
+10. It generates plots and diagnostics in `data/plots/` and `data/diagnostics/`.
+
+You can also run the project from RStudio by sourcing `run_from_R.R`.
+
+## 3. How the reference date is selected
+
+The pipeline selects the reference date as the upcoming Saturday by default:
+
+```r
+ref <- if (!is.null(opt("reference-date"))) as.IDate(opt("reference-date")) else today + ((7L - wday(today)) %% 7L)
+```
+
+This means the run targets the next valid Saturday submission date unless you override it explicitly with `--reference-date`.
+
+## 4. Data and model preparation
+
+The workflow loads hub data and other relevant time series before fitting. The main steps are:
+
+- `load_locations(hub)` loads hub locations.
+- `load_latest(hub)` reads the latest available forecast data in the hub repository.
+- `load_aux(nssp, locs)` loads the auxiliary NSSP series.
+- `transform_stats()` and `make_meta()` prepare the model features.
+- `fit_gbqr()`, `fit_qrf()`, and `fit_lqr()` fit the component models.
+
+The model then predicts the target horizon, merges the quantile outputs, and prepares the final submission object.
+
+## 5. Correction step for SC, NC, and GA
+
+The correction layer is defined in `correction.R`. It is only used when `--no-correction` is not set and the location is in the correction states.
+
+Before applying the correction, the code checks whether:
+
+- the Prisma Health file is present,
+- the MUSC file is present,
+- the latest NSSP week appears in both files,
+- the most recent week has enough data to be considered complete,
+- the signal is not stale or too incomplete to use.
+
+If any check fails, the correction is skipped and the system falls back to the median-only forecast. The code is intentionally conservative: the fallback is safer than forcing a bad correction.
+
+## 6. Validation and output files
+
+After forecasting, the script writes a parquet submission file to the hub output directory:
+
+```text
+flu-metrocast/model-output/DMAPRIME-QR/<reference-date>-DMAPRIME-QR_E.parquet
+```
+
+It then runs `validate.R` checks, and if everything passes it prints:
+
+```text
+validation: all <n> checks passed
+```
+
+The script also writes:
+
+- `data/plots/<reference-date>-DMAPRIME-QR_E.pdf`
+- `data/plots/<reference-date>-DMAPRIME-QR_E.html`
+- `data/diagnostics/<reference-date>-DMAPRIME-QR_E_quantiles.csv`
+- `data/diagnostics/<reference-date>-DMAPRIME-QR_E_internal.rds`
+
+## 7. Submission procedure
+
+The code ends with a clear submission instruction:
+
+1. Inspect the generated forecast plots.
+2. Confirm validation has passed.
+3. Commit the parquet file to your fork of `reichlab/flu-metrocast`.
+4. Open a pull request to the model-output directory for the appropriate team-model.
+
+If you run from RStudio using `run_from_R.R`, the script will also open the newest HTML plot automatically when the run is complete.
+
+## 8. Files in this repository
+
+- `run_weekly.R` — main execution script for the full pipeline
+- `run_from_R.R` — convenience runner for RStudio / plain R
+- `config.R` — local configuration values
+- `metrocast_lib.R` — helper functions, feature prep, model fitting, and output generation
+- `correction.R` — Prisma + MUSC correction logic
+- `validate.R` — hub validation checks
+- `plot_forecast.R` — PDF and HTML plotting
+- `model-metadata/DMAPRIME-QR_E.yml` — metadata for the hub submission
+- `tests/` — validation and safety checks
+
+## 9. Operating rhythm
+
+The repository is built around a recurring weekly cadence. The workflow assumes the hub has updated its data on Wednesday, and the run is done after the latest information is available. The script warns if the hub data appear stale relative to the expected deadline.
+
+This is not a generic package and not just a setup guide. It is the actual operating procedure for producing and validating the weekly forecast submission.
