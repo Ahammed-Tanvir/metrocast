@@ -58,8 +58,3 @@ The correction layer targets SC, NC, and GA only. It compares the latest Prisma 
 
 This safeguard prevents the adjustment from being applied under weak signal conditions and is designed to preserve forecast quality rather than force an intervention when evidence is insufficient.
 
-## Notes
-
-- The project is designed around the weekly FluSight update cycle.
-- The workflow warns if hub data appear stale relative to the expected due date.
-- The repository is operational forecast code used to generate the weekly DMAPRIME-QR_E submission, not a generic R package.
