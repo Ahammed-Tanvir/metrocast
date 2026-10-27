@@ -1,6 +1,6 @@
 # =============================================================================
-# Forecast plots in the style of the MetroCast dashboard: observed data (black), forecast median
-# (orange) with 50% and 95% intervals, vertical line at the forecast due date.
+# Forecast plots: observed data (black), forecast median (orange) 
+# with 50% and 95% intervals, vertical line at the forecast due date.
 #   plot_submission(file, hub, out_prefix)  ->  <out_prefix>.pdf (one page per location)
 #                                               <out_prefix>.html (viewer with a location menu)
 #   as a script: Rscript plot_forecast.R <file.parquet> <hub_dir> <out_prefix>
