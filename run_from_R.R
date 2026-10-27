@@ -1,9 +1,6 @@
 # =============================================================================
 # Run the weekly MetroCast pipeline from R or RStudio.
 #
-#   In RStudio: open this file and click "Source" (top right of the editor).
-#   In plain R: source("~/Documents/DMAPRIME-QR_pipeline/run_from_R.R")   (use your folder)
-#
 # It runs run_weekly.R, prints its messages here, and opens the forecast plots when it is done.
 # =============================================================================
 UPDATE_DATA    <- TRUE    # pull the hub and download the latest NSSP file first
