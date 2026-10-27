@@ -7,9 +7,6 @@
 # Then, for South Carolina, North Carolina and Georgia only, the pooled Prisma Health + MUSC
 # correction (correction.R). Output: 100 trajectories per location, README format.
 #
-# Every Wednesday, after the hub's data update (submissions due 8 PM ET), from this folder:
-#   Rscript run_weekly.R --update
-# then open the PDF/HTML plots in data/plots/, and submit the parquet file (see README.md).
 #
 # Options (defaults in config.R):
 #   --update                git pull the hub (clone on first use) and download the latest NSSP file
